@@ -1,13 +1,20 @@
-apiVersion: v1
-kind: Service
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: dba-dashboard-service   # <-- Make sure this matches!
+  name: oracle-dba-dashboard
   namespace: oracle-dba-lab
 spec:
-  type: NodePort
+  replicas: 1
   selector:
-    app: dba-dashboard
-  ports:
-    - port: 80
-      targetPort: 80
-      nodePort: 30089
+    matchLabels:
+      app: oracle-dba-dashboard
+  template:
+    metadata:
+      labels:
+        app: oracle-dba-dashboard
+    spec:
+      containers:
+      - name: oracle-dba-dashboard
+        image: bus57790/oracle-dba-lab:latest
+        ports:
+        - containerPort: 80
