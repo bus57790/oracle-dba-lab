@@ -20,16 +20,17 @@ pipeline {
         stage('SonarQube Code Quality Analysis') {
             steps {
                 echo "2. Running static analysis on single-file React DBA Dashboard..."
-                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                    sh """
+                withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+                    sh '''
                         docker run --rm \
                         -v "${WORKSPACE}:/usr/src" \
                         sonarsource/sonar-scanner-cli \
                         -Dsonar.projectKey=oracle-dba-dashboard \
                         -Dsonar.sources=frontend \
                         -Dsonar.host.url=${SONAR_HOST} \
-                        -Dsonar.login=${SONAR_TOKEN}
-                    """
+                        -Dsonar.token=${SONAR_TOKEN} \
+                        -Dsonar.javascript.environments=browser
+                    '''
                 }
             }
         }
@@ -48,12 +49,12 @@ pipeline {
             steps {
                 echo "4. Pushing build artifacts to Docker Hub..."
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_PASS')]) {
-                    sh """
+                    sh '''
                         echo "${DOCKERHUB_PASS}" | docker login -u "${DOCKERHUB_USER}" --password-stdin
                         docker push ${DOCKERHUB_REPO}:${IMAGE_TAG}
                         docker push ${DOCKERHUB_REPO}:latest
                         docker logout
-                    """
+                    '''
                 }
             }
         }
@@ -75,22 +76,22 @@ pipeline {
 
     post {
         success {
-            sh """
+            sh '''
                 curl -X POST -H 'Content-type: application/json' \
                 --data '{
-                    "text": "✅ *Oracle DBA Dashboard Pipeline Completed!*\\n*Target DB:* `${ORACLE_TNS}`\\n*Build Image Tag:* `${IMAGE_TAG}`\\n*Modules Deployed:* User Mgmt, Tablespaces, Instance Lifecycle, Performance, RMAN Backups, Audit History\\n*GitOps Engine:* Argo CD auto-syncing to Minikube cluster."
+                    "text": "✅ *Oracle DBA Dashboard Pipeline Completed!*\n*Target DB:* `'"${ORACLE_TNS}"'`\n*Build Image Tag:* `'"${IMAGE_TAG}"'`\n*Modules Deployed:* User Mgmt, Tablespaces, Instance Lifecycle, Performance, RMAN Backups, Audit History\n*GitOps Engine:* Argo CD auto-syncing to Minikube cluster."
                 }' \
                 ${SLACK_WEBHOOK}
-            """
+            '''
         }
         failure {
-            sh """
+            sh '''
                 curl -X POST -H 'Content-type: application/json' \
                 --data '{
-                    "text": "❌ *Oracle DBA Dashboard Pipeline Failed!*\\n*Build Number:* #${BUILD_NUMBER}\\n*Target DB:* `${ORACLE_TNS}`\\nPlease inspect Jenkins build logs."
+                    "text": "❌ *Oracle DBA Dashboard Pipeline Failed!*\n*Build Number:* #'"${BUILD_NUMBER}"'\n*Target DB:* `'"${ORACLE_TNS}"'`\nPlease inspect Jenkins build logs."
                 }' \
                 ${SLACK_WEBHOOK}
-            """
+            '''
         }
         always {
             sh "docker rmi ${DOCKERHUB_REPO}:${IMAGE_TAG} ${DOCKERHUB_REPO}:latest || true"
