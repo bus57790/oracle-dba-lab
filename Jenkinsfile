@@ -2,14 +2,11 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY_HOST  = 'harbor.local'
-        IMAGE_NAME     = 'oracle/dba-dashboard'
+        DOCKERHUB_REPO = 'bus57790/oracle-dba-lab'
         IMAGE_TAG      = "build-${BUILD_NUMBER}"
         ORACLE_TNS     = '//192.168.1.188:1521/ORCL'
-        ORACLE_PDB     = 'ORCLPDB'
         SONAR_HOST     = 'http://192.168.1.184:9000'
         SLACK_WEBHOOK  = credentials('slack-webhook-url')
-        REGISTRY_CREDS = credentials('harbor-registry-creds')
     }
 
     stages {
@@ -23,7 +20,7 @@ pipeline {
         stage('SonarQube Code Quality Analysis') {
             steps {
                 echo "2. Running static analysis on single-file React DBA Dashboard..."
-                withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     sh """
                         docker run --rm \
                         -v "${WORKSPACE}:/usr/src" \
@@ -41,20 +38,23 @@ pipeline {
             steps {
                 echo "3. Packaging Nginx container image with interactive DBA App..."
                 sh """
-                    docker build -t ${REGISTRY_HOST}/${IMAGE_NAME}:${IMAGE_TAG} .
-                    docker tag ${REGISTRY_HOST}/${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY_HOST}/${IMAGE_NAME}:latest
+                    docker build -t ${DOCKERHUB_REPO}:${IMAGE_TAG} .
+                    docker tag ${DOCKERHUB_REPO}:${IMAGE_TAG} ${DOCKERHUB_REPO}:latest
                 """
             }
         }
 
-        stage('Push to Container Registry') {
+        stage('Push to Docker Hub') {
             steps {
-                echo "4. Pushing build artifacts to local container registry..."
-                sh """
-                    echo "${REGISTRY_CREDS_PSW}" | docker login ${REGISTRY_HOST} -u "${REGISTRY_CREDS_USR}" --password-stdin
-                    docker push ${REGISTRY_HOST}/${IMAGE_NAME}:${IMAGE_TAG}
-                    docker push ${REGISTRY_HOST}/${IMAGE_NAME}:latest
-                """
+                echo "4. Pushing build artifacts to Docker Hub..."
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_PASS')]) {
+                    sh """
+                        echo "${DOCKERHUB_PASS}" | docker login -u "${DOCKERHUB_USER}" --password-stdin
+                        docker push ${DOCKERHUB_REPO}:${IMAGE_TAG}
+                        docker push ${DOCKERHUB_REPO}:latest
+                        docker logout
+                    """
+                }
             }
         }
 
@@ -62,7 +62,7 @@ pipeline {
             steps {
                 echo "5. Updating K8s deployment manifest image tag..."
                 sh """
-                    sed -i 's|image: ${REGISTRY_HOST}/${IMAGE_NAME}:.*|image: ${REGISTRY_HOST}/${IMAGE_NAME}:${IMAGE_TAG}|g' k8s/deployment.yaml
+                    sed -i 's|image: ${DOCKERHUB_REPO}:.*|image: ${DOCKERHUB_REPO}:${IMAGE_TAG}|g' k8s/deployment.yaml
                     git config user.name "Jenkins CI Engine"
                     git config user.email "jenkins@home-lab.local"
                     git add k8s/deployment.yaml
@@ -78,7 +78,7 @@ pipeline {
             sh """
                 curl -X POST -H 'Content-type: application/json' \
                 --data '{
-                    "text": "✅ *Oracle DBA Dashboard Pipeline Completed!*\\n*Target DB:* `${ORACLE_TNS}` (`${ORACLE_PDB}`)\\n*Build Image Tag:* `${IMAGE_TAG}`\\n*Modules Deployed:* User Mgmt, Tablespaces, Instance Lifecycle, Performance, RMAN Backups, Audit History\\n*GitOps Engine:* Argo CD auto-syncing to Minikube cluster."
+                    "text": "✅ *Oracle DBA Dashboard Pipeline Completed!*\\n*Target DB:* `${ORACLE_TNS}`\\n*Build Image Tag:* `${IMAGE_TAG}`\\n*Modules Deployed:* User Mgmt, Tablespaces, Instance Lifecycle, Performance, RMAN Backups, Audit History\\n*GitOps Engine:* Argo CD auto-syncing to Minikube cluster."
                 }' \
                 ${SLACK_WEBHOOK}
             """
@@ -91,6 +91,9 @@ pipeline {
                 }' \
                 ${SLACK_WEBHOOK}
             """
+        }
+        always {
+            sh "docker rmi ${DOCKERHUB_REPO}:${IMAGE_TAG} ${DOCKERHUB_REPO}:latest || true"
         }
     }
 }
