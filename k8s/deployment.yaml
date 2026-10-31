@@ -4,7 +4,7 @@ metadata:
   name: oracle-dba-dashboard
   namespace: oracle-dba-lab
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: oracle-dba-dashboard
@@ -13,8 +13,11 @@ spec:
       labels:
         app: oracle-dba-dashboard
     spec:
+      imagePullSecrets:
+      - name: dockerhub-secret
       containers:
       - name: oracle-dba-dashboard
         image: bus57790/oracle-dba-lab:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 80
