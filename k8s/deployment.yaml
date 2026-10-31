@@ -18,6 +18,6 @@ spec:
       containers:
       - name: oracle-dba-dashboard
         image: bus57790/oracle-dba-lab:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
