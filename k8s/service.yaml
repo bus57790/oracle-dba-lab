@@ -3,14 +3,11 @@ kind: Service
 metadata:
   name: dba-dashboard-service
   namespace: oracle-dba-lab
-  labels:
-    app: oracle-dba-dashboard
 spec:
   type: NodePort
   ports:
   - port: 80
     targetPort: 80
     nodePort: 30089
-    protocol: TCP
   selector:
     app: oracle-dba-dashboard

@@ -4,7 +4,7 @@ metadata:
   name: oracle-dba-dashboard
   namespace: oracle-dba-lab
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: oracle-dba-dashboard
